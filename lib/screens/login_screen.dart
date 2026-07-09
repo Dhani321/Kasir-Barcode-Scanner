@@ -12,7 +12,6 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  String _selectedRole = 'kasir';
   bool _obscurePassword = true;
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
@@ -78,27 +77,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     const Text('Masuk untuk mengakses terminal',
                         style: TextStyle(fontSize: 14, color: AppColors.onSurfaceVariant)),
                     const SizedBox(height: 32),
-                    // Role selector
-                    _buildLabel('Pilih Peran'),
-                    const SizedBox(height: 6),
-                    Container(
-                      width: double.infinity, height: 48,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface, borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.outlineVariant)),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedRole, isExpanded: true,
-                          items: const [
-                            DropdownMenuItem(value: 'kasir', child: Text('Kasir')),
-                            DropdownMenuItem(value: 'admin', child: Text('Admin Toko')),
-                          ],
-                          onChanged: (v) => setState(() => _selectedRole = v ?? 'kasir'),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
                     _buildLabel('ID Karyawan / Username'),
                     const SizedBox(height: 6),
                     _buildTextField(controller: _usernameCtrl, hint: 'e.g. ADM-001 atau KSR-001',
