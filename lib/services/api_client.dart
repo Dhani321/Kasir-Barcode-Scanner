@@ -1,8 +1,11 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  static const String baseUrl = 'http://127.0.0.1:8082/api';
+  static final String baseUrl = kIsWeb
+      ? '${Uri.base.scheme}://${Uri.base.host}${Uri.base.port != 80 && Uri.base.port != 443 ? ":" + Uri.base.port.toString() : ""}/api'
+      : 'http://127.0.0.1:8082/api';
   static const String _tokenKey = 'auth_token';
 
   static String? _token;
