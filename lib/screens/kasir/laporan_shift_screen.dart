@@ -231,12 +231,13 @@ class _LaporanShiftScreenState extends State<LaporanShiftScreen> {
                 Expanded(child: Text('Waktu', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.onSurfaceVariant))),
                 Expanded(flex: 2, child: Text('Total', textAlign: TextAlign.right, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.onSurfaceVariant))),
                 Expanded(child: Padding(padding: EdgeInsets.only(left: 12), child: Text('Metode', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.onSurfaceVariant)))),
+                SizedBox(width: 100, child: Text('Cetak Struk', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.onSurfaceVariant))),
               ]),
             ),
             if (txns.isEmpty)
               const Padding(padding: EdgeInsets.all(32), child: Text('Belum ada transaksi', style: TextStyle(color: AppColors.onSurfaceVariant)))
             else
-              ...txns.map((t) => _TxnRow(txn: t)),
+              ...txns.map((t) => _TxnRow(txn: t, kasirName: kasirName)),
           ]),
         ),
         const SizedBox(height: 20),
@@ -294,18 +295,28 @@ class _ShiftStat extends StatelessWidget {
 
 class _TxnRow extends StatelessWidget {
   final dynamic txn;
-  const _TxnRow({required this.txn});
+  final String kasirName;
+  const _TxnRow({required this.txn, required this.kasirName});
 
   String _fmt(dynamic v) {
     final val = (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0.0);
     return 'Rp ${val.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (m) => "${m[1]}.")}';
   }
 
+  void _openPrintReceiptDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _ThermalReceiptDialog(txn: txn, kasirName: kasirName),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final time = txn['created_at']?.toString().substring(11, 16) ?? '';
+    final methodStr = (txn['payment_method'] ?? '').toString().toUpperCase();
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.outlineVariant))),
       child: Row(children: [
         Expanded(flex: 2, child: Text(txn['transaction_number'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, fontFamily: 'monospace'))),
@@ -316,10 +327,177 @@ class _TxnRow extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(color: AppColors.surfaceContainerLow, borderRadius: BorderRadius.circular(6)),
-            child: Text((txn['payment_method'] ?? '').toString().toUpperCase(), style: const TextStyle(fontSize: 10, color: AppColors.onSurfaceVariant)),
+            child: Text(methodStr, style: const TextStyle(fontSize: 10, color: AppColors.onSurfaceVariant)),
           ),
         )),
+        SizedBox(
+          width: 100,
+          child: Center(
+            child: ElevatedButton.icon(
+              onPressed: () => _openPrintReceiptDialog(context),
+              icon: const Icon(Icons.print_rounded, size: 14),
+              label: const Text('Print', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+        ),
       ]),
+    );
+  }
+}
+
+class _ThermalReceiptDialog extends StatelessWidget {
+  final dynamic txn;
+  final String kasirName;
+  const _ThermalReceiptDialog({required this.txn, required this.kasirName});
+
+  String _fmt(dynamic v) {
+    final val = (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0.0);
+    return 'Rp ${val.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (m) => "${m[1]}.")}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = (txn['items'] as List?) ?? [];
+    final tNum = txn['transaction_number'] ?? '-';
+    final timeStr = txn['created_at']?.toString().substring(0, 16).replaceAll('T', ' ') ?? '-';
+    final grandTotal = txn['grand_total'] ?? 0;
+    final payAmount = txn['paid_amount'] ?? grandTotal;
+    final changeAmount = txn['change_amount'] ?? 0;
+    final method = (txn['payment_method'] ?? 'CASH').toString().toUpperCase();
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 380,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(children: [
+                  Icon(Icons.print_rounded, color: AppColors.primary, size: 20),
+                  SizedBox(width: 8),
+                  Text('Cetak Ulang Struk', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ]),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const Divider(height: 16),
+            // Thermal Receipt Ticket Container
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                children: [
+                  const Text('RETAIL DESA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  const Text('Toko Kasir & Minimarket Desa', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  const Text('----------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'monospace')),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text('No: $tNum', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, fontFamily: 'monospace')),
+                    Text(timeStr, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                  ]),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text('Kasir: $kasirName', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                    Text('Metode: $method', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                  ]),
+                  const Text('----------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'monospace')),
+                  const SizedBox(height: 4),
+                  // Items
+                  ...items.map((item) {
+                    final pName = item['product_name'] ?? 'Barang';
+                    final qty = item['qty'] ?? 1;
+                    final price = item['price'] ?? 0;
+                    final sub = item['subtotal'] ?? 0;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(pName, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('  $qty x ${_fmt(price)}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                              Text(_fmt(sub), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const Text('----------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'monospace')),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('TOTAL :', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      Text(_fmt(grandTotal), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                    ],
+                  ),
+                  if (method == 'CASH') ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Bayar :', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text(_fmt(payAmount), style: const TextStyle(fontSize: 11)),
+                      ],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Kembali :', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text(_fmt(changeAmount), style: const TextStyle(fontSize: 11)),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  const Text('*** TERIMA KASIH ***', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  const Text('Barang yang sudah dibeli tidak dapat ditukar', style: TextStyle(fontSize: 8, color: Colors.grey)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Struk $tNum berhasil dicetak ulang!'),
+                  backgroundColor: AppColors.primary,
+                  duration: const Duration(seconds: 2),
+                ));
+              },
+              icon: const Icon(Icons.print_rounded),
+              label: const Text('Cetak Struk Sekarang'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

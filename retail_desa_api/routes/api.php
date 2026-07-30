@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\ShiftController;
+use App\Http\Controllers\Api\ActivityLogController;
 use Illuminate\Support\Facades\Route;
 
 // ─── Public Routes ────────────────────────────────────────────
@@ -21,9 +22,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('auth/me',      [AuthController::class, 'me']);
 
     // Products (Kasir: read-only | Admin: full CRUD)
-    Route::get('products/categories', [ProductController::class, 'categories']);
-    Route::get('products',            [ProductController::class, 'index']);
-    Route::get('products/{product}',  [ProductController::class, 'show']);
+    Route::get('products/categories',     [ProductController::class, 'categories']);
+    Route::get('products/check-sku/{sku}', [ProductController::class, 'checkSku']);
+    Route::get('products',                [ProductController::class, 'index']);
+    Route::get('products/{product}',      [ProductController::class, 'show']);
 
     Route::middleware('ability:admin')->group(function () {
         Route::post('products',                      [ProductController::class, 'store']);
@@ -33,9 +35,9 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // Transactions
-    Route::get('transactions',             [TransactionController::class, 'index']);
-    Route::post('transactions',            [TransactionController::class, 'store']);
-    Route::get('transactions/{transaction}',[TransactionController::class, 'show']);
+    Route::get('transactions',              [TransactionController::class, 'index']);
+    Route::post('transactions',             [TransactionController::class, 'store']);
+    Route::get('transactions/{transaction}', [TransactionController::class, 'show']);
     Route::patch('transactions/{transaction}/void', [TransactionController::class, 'void']);
 
     // Shifts
@@ -45,11 +47,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('shifts/close',   [ShiftController::class, 'close']);
     Route::get('shifts/{shift}',  [ShiftController::class, 'show']);
 
+    // Activity Logs
+    Route::get('activity-logs',   [ActivityLogController::class, 'index']);
+
     // Reports (Admin only)
     Route::prefix('reports')->group(function () {
         Route::get('sales',            [ReportController::class, 'sales']);
         Route::get('dashboard',        [ReportController::class, 'dashboard']);
         Route::get('shift/{shiftId}',  [ReportController::class, 'shiftReport']);
+        Route::get('stock-movement',   [ReportController::class, 'stockMovement']);
+        Route::get('cashier-shifts',   [ReportController::class, 'cashierShifts']);
+        Route::get('item-sales',       [ReportController::class, 'itemSales']);
     });
 
     // User Management (Admin only)

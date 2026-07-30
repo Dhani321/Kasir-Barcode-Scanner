@@ -5,6 +5,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Shift;
 use App\Models\Transaction;
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -30,12 +31,12 @@ class TransactionController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'items'          => 'required|array|min:1',
+            'items'              => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
-            'items.*.qty'    => 'required|integer|min:1',
-            'payment_method' => 'required|in:cash,card,digital',
-            'payment_amount' => 'required|numeric|min:0',
-            'customer_name'  => 'nullable|string',
+            'items.*.qty'        => 'required|integer|min:1',
+            'payment_method'     => 'required|in:cash,card,digital',
+            'payment_amount'     => 'required|numeric|min:0',
+            'customer_name'      => 'nullable|string',
         ]);
 
         DB::beginTransaction();
@@ -53,6 +54,7 @@ class TransactionController extends Controller
 
             $subtotal = 0;
             $itemsData = [];
+            $stockLogsToCreate = [];
 
             foreach ($request->items as $item) {
                 $product = Product::findOrFail($item['product_id']);
@@ -77,8 +79,16 @@ class TransactionController extends Controller
                     'discount'     => $item['discount'] ?? 0,
                 ];
 
-                // Deduct stock
+                $oldStock = $product->stock;
                 $product->decrement('stock', $item['qty']);
+                $newStock = $oldStock - $item['qty'];
+
+                $stockLogsToCreate[] = [
+                    'product'  => $product,
+                    'qty'      => $item['qty'],
+                    'oldStock' => $oldStock,
+                    'newStock' => $newStock,
+                ];
             }
 
             $taxRate = (float) (\App\Models\Setting::get('tax_rate', '10'));
@@ -101,6 +111,19 @@ class TransactionController extends Controller
             ]);
 
             $transaction->items()->createMany($itemsData);
+
+            // Log stock out for each item sold
+            foreach ($stockLogsToCreate as $sl) {
+                ActivityLog::log(
+                    $kasir,
+                    'sale_stock_out',
+                    $sl['product'],
+                    -$sl['qty'],
+                    $sl['oldStock'],
+                    $sl['newStock'],
+                    "Penjualan barang '{$sl['product']->name}' (Kode: {$sl['product']->sku}) sebanyak {$sl['qty']} pcs [Transaksi #{$transaction->transaction_number}]"
+                );
+            }
 
             // Update shift totals
             if ($shift) {
@@ -127,7 +150,7 @@ class TransactionController extends Controller
     }
 
     // PATCH /api/transactions/{id}/void
-    public function void(Transaction $transaction)
+    public function void(Request $request, Transaction $transaction)
     {
         if ($transaction->status !== 'completed') {
             return response()->json(['message' => 'Transaksi tidak bisa di-void.'], 422);
@@ -135,9 +158,26 @@ class TransactionController extends Controller
 
         DB::beginTransaction();
         try {
+            $user = $request->user();
+
             // Restore stock
             foreach ($transaction->items as $item) {
-                Product::find($item->product_id)?->increment('stock', $item->qty);
+                $prod = Product::find($item->product_id);
+                if ($prod) {
+                    $oldStock = $prod->stock;
+                    $prod->increment('stock', $item->qty);
+                    $newStock = $prod->fresh()->stock;
+
+                    ActivityLog::log(
+                        $user,
+                        'add_stock',
+                        $prod,
+                        $item->qty,
+                        $oldStock,
+                        $newStock,
+                        "Pengembalian stok '{$prod->name}' (Kode: {$prod->sku}) sebanyak +{$item->qty} pcs karena void transaksi #{$transaction->transaction_number}"
+                    );
+                }
             }
 
             $transaction->update(['status' => 'void']);

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart';
 import '../../../services/user_service.dart'; // also exports ReportService and SettingService
-
+import '../../../services/api_client.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
@@ -62,7 +62,7 @@ class _DashboardTabState extends State<DashboardTab> {
           ),
           const SizedBox(width: 8),
           ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: () => _openItemSalesFilterModal(context),
             icon: const Icon(Icons.download_rounded, size: 16),
             label: const Text('Export Laporan'),
             style: ElevatedButton.styleFrom(
@@ -119,6 +119,299 @@ class _DashboardTabState extends State<DashboardTab> {
         ),
       ]),
     );
+  }
+
+  void _openItemSalesFilterModal(BuildContext context) {
+    int selectedMonth = DateTime.now().month;
+    int selectedYear = DateTime.now().year;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateModal) {
+          return AlertDialog(
+            title: const Row(children: [
+              Icon(Icons.assessment_rounded, color: AppColors.primary),
+              SizedBox(width: 10),
+              Text('Export Laporan Penjualan Per Item Bulanan'),
+            ]),
+            content: SizedBox(
+              width: 480,
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Pilih periode bulan dan tahun untuk laporan penjualan detail per item:',
+                    style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant)),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      initialValue: selectedMonth,
+                      decoration: const InputDecoration(labelText: 'Bulan', border: OutlineInputBorder()),
+                      items: const [
+                        DropdownMenuItem(value: 1, child: Text('Januari')),
+                        DropdownMenuItem(value: 2, child: Text('Februari')),
+                        DropdownMenuItem(value: 3, child: Text('Maret')),
+                        DropdownMenuItem(value: 4, child: Text('April')),
+                        DropdownMenuItem(value: 5, child: Text('Mei')),
+                        DropdownMenuItem(value: 6, child: Text('Juni')),
+                        DropdownMenuItem(value: 7, child: Text('Juli')),
+                        DropdownMenuItem(value: 8, child: Text('Agustus')),
+                        DropdownMenuItem(value: 9, child: Text('September')),
+                        DropdownMenuItem(value: 10, child: Text('Oktober')),
+                        DropdownMenuItem(value: 11, child: Text('November')),
+                        DropdownMenuItem(value: 12, child: Text('Desember')),
+                      ],
+                      onChanged: (v) => setStateModal(() => selectedMonth = v!),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      initialValue: selectedYear,
+                      decoration: const InputDecoration(labelText: 'Tahun', border: OutlineInputBorder()),
+                      items: [2024, 2025, 2026, 2027].map((y) => DropdownMenuItem(value: y, child: Text('$y'))).toList(),
+                      onChanged: (v) => setStateModal(() => selectedYear = v!),
+                    ),
+                  ),
+                ]),
+              ]),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  showDialog(
+                    context: context,
+                    builder: (c) => _ItemSalesReportPreviewModal(month: selectedMonth, year: selectedYear),
+                  );
+                },
+                icon: const Icon(Icons.visibility_rounded, size: 18),
+                label: const Text('Tampilkan Laporan'),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ItemSalesReportPreviewModal extends StatefulWidget {
+  final int month;
+  final int year;
+  const _ItemSalesReportPreviewModal({required this.month, required this.year});
+
+  @override
+  State<_ItemSalesReportPreviewModal> createState() => _ItemSalesReportPreviewModalState();
+}
+
+class _ItemSalesReportPreviewModalState extends State<_ItemSalesReportPreviewModal> {
+  bool _loading = true;
+  String? _error;
+  Map<String, dynamic>? _report;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReport();
+  }
+
+  Future<void> _loadReport() async {
+    try {
+      final res = await ApiClient.get('/reports/item-sales', params: {
+        'month': widget.month,
+        'year': widget.year,
+      });
+      setState(() {
+        _report = res.data as Map<String, dynamic>;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Gagal memuat laporan penjualan per item: $e';
+        _loading = false;
+      });
+    }
+  }
+
+  String _fmt(dynamic v) {
+    final val = (v is int ? v.toDouble() : (v is double ? v : double.tryParse(v.toString()) ?? 0.0));
+    return 'Rp ${val.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+  }
+
+  String _getMonthName(int m) {
+    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    return (m >= 1 && m <= 12) ? months[m - 1] : '$m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = 'Laporan Penjualan Per Item - ${_getMonthName(widget.month)} ${widget.year}';
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 880,
+        height: 650,
+        padding: const EdgeInsets.all(24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              const Text('Rekapitulasi total unit terjual dan pendapatan per item produk.',
+                  style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
+            ]),
+            IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(context)),
+          ]),
+          const Divider(height: 24),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(child: Text(_error!, style: const TextStyle(color: AppColors.error)))
+                    : _buildReportBody(),
+          ),
+          const Divider(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Tutup'),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: _loading || _error != null
+                    ? null
+                    : () {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Menyiapkan & mencetak $title...'),
+                          backgroundColor: AppColors.primary,
+                          duration: const Duration(seconds: 2),
+                        ));
+                      },
+                icon: const Icon(Icons.print_rounded, size: 18),
+                label: const Text('Cetak / Print Laporan'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildReportBody() {
+    final summary = _report?['summary'] ?? {};
+    final totalRev = summary['total_revenue'] ?? 0;
+    final totalUnits = summary['total_units_sold'] ?? 0;
+    final distinctCount = summary['distinct_items'] ?? 0;
+    final topSeller = summary['top_selling_item'];
+    final items = (_report?['items'] as List?) ?? [];
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: AppColors.primaryContainer, borderRadius: BorderRadius.circular(10)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Total Omset Penjualan', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.onPrimaryContainer)),
+            const SizedBox(height: 4),
+            Text(_fmt(totalRev), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
+          ]),
+        )),
+        const SizedBox(width: 10),
+        Expanded(child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: AppColors.secondaryContainer, borderRadius: BorderRadius.circular(10)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Total Unit Terjual', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.onSecondaryContainer)),
+            const SizedBox(height: 4),
+            Text('$totalUnits Pcs ($distinctCount Produk)', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.onSecondaryContainer)),
+          ]),
+        )),
+        const SizedBox(width: 10),
+        Expanded(child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.shade200)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Produk Terlaris (Top Seller)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
+            const SizedBox(height: 4),
+            Text(
+              topSeller != null ? '${topSeller['name']} (${topSeller['total_qty']} pcs)' : '-',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ]),
+        )),
+      ]),
+      const SizedBox(height: 16),
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text('Rincian Penjualan per Produk (${items.length} Item Terjual)', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+      ]),
+      const SizedBox(height: 8),
+      Container(
+        color: AppColors.surfaceContainer,
+        child: const Row(children: [
+          SizedBox(width: 40, child: _TH('#', center: true)),
+          Expanded(flex: 3, child: _TH('Nama Produk / SKU')),
+          Expanded(flex: 2, child: _TH('Kategori')),
+          Expanded(flex: 2, child: _TH('Harga Satuan', right: true)),
+          Expanded(flex: 2, child: _TH('Qty Terjual', center: true)),
+          Expanded(flex: 2, child: _TH('Total Omset', right: true)),
+        ]),
+      ),
+      Expanded(
+        child: items.isEmpty
+            ? const Center(child: Text('Belum ada transaksi penjualan pada bulan ini.'))
+            : ListView.separated(
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.outlineVariant),
+                itemBuilder: (context, i) {
+                  final item = items[i];
+                  return Container(
+                    color: AppColors.surfaceContainerLowest,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(children: [
+                      SizedBox(width: 40, child: Text('${i + 1}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                      Expanded(flex: 3, child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(item['product_name'] ?? '-', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          Text('Kode: ${item['product_sku'] ?? '-'}', style: const TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant, fontFamily: 'monospace')),
+                        ]),
+                      )),
+                      Expanded(flex: 2, child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(item['category'] ?? 'Umum', style: const TextStyle(fontSize: 12)),
+                      )),
+                      Expanded(flex: 2, child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(_fmt(item['price']), textAlign: TextAlign.right, style: const TextStyle(fontSize: 12)),
+                      )),
+                      Expanded(flex: 2, child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                          decoration: BoxDecoration(color: AppColors.primaryContainer, borderRadius: BorderRadius.circular(12)),
+                          child: Text('${item['total_qty']} pcs', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.onPrimaryContainer)),
+                        ),
+                      )),
+                      Expanded(flex: 2, child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(_fmt(item['total_revenue']), textAlign: TextAlign.right, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                      )),
+                    ]),
+                  );
+                },
+              ),
+      ),
+    ]);
   }
 }
 
@@ -289,6 +582,19 @@ class _StatCard extends StatelessWidget {
       const SizedBox(height: 4),
       Text(sub, style: TextStyle(fontSize: 13, color: fg == AppColors.onSurface ? AppColors.onSurfaceVariant : fg.withOpacity(0.7))),
     ]),
+  );
+}
+
+class _TH extends StatelessWidget {
+  final String text;
+  final bool right, center;
+  const _TH(this.text, {this.right = false, this.center = false});
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    child: Text(text,
+        textAlign: right ? TextAlign.right : (center ? TextAlign.center : TextAlign.left),
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.onSurfaceVariant)),
   );
 }
 

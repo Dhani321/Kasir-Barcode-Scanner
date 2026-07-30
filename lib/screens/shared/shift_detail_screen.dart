@@ -48,6 +48,23 @@ class _ShiftDetailScreenState extends State<ShiftDetailScreen> {
         backgroundColor: AppColors.surfaceContainerLowest,
         scrolledUnderElevation: 0,
         centerTitle: true,
+        actions: [
+          if (!_loading && _shift != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: ElevatedButton.icon(
+                onPressed: () => _openExportSingleShiftDialog(context),
+                icon: const Icon(Icons.file_download_outlined, size: 16),
+                label: const Text('Export Laporan Shift Ini', style: TextStyle(fontSize: 12)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -102,7 +119,17 @@ class _ShiftDetailScreenState extends State<ShiftDetailScreen> {
             ),
             const SizedBox(height: 24),
             // Transaction List
-            const Text('Daftar Transaksi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Daftar Transaksi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                OutlinedButton.icon(
+                  onPressed: () => _openExportSingleShiftDialog(context),
+                  icon: const Icon(Icons.print_rounded, size: 16),
+                  label: const Text('Cetak / Export Shift'),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             if (txns.isEmpty)
               const Center(child: Padding(
@@ -175,5 +202,200 @@ class _ShiftDetailScreenState extends State<ShiftDetailScreen> {
         ),
       ]),
     );
+  }
+
+  void _openExportSingleShiftDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _SingleShiftReportPreviewModal(shiftId: widget.shiftId),
+    );
+  }
+}
+
+class _SingleShiftReportPreviewModal extends StatefulWidget {
+  final int shiftId;
+  const _SingleShiftReportPreviewModal({required this.shiftId});
+
+  @override
+  State<_SingleShiftReportPreviewModal> createState() => _SingleShiftReportPreviewModalState();
+}
+
+class _SingleShiftReportPreviewModalState extends State<_SingleShiftReportPreviewModal> {
+  bool _loading = true;
+  String? _error;
+  Map<String, dynamic>? _report;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final res = await ApiClient.get('/reports/shift/${widget.shiftId}');
+      setState(() {
+        _report = res.data as Map<String, dynamic>;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Gagal memuat laporan shift: $e';
+        _loading = false;
+      });
+    }
+  }
+
+  String _fmt(dynamic v) {
+    final val = (v is int ? v.toDouble() : (v is double ? v : double.tryParse(v.toString()) ?? 0.0));
+    return 'Rp ${val.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shiftData = _report?['shift'];
+    final kasirName = shiftData?['kasir']?['name'] ?? 'Kasir';
+    final startTime = shiftData?['start_time']?.toString().substring(0, 16) ?? '-';
+    final endTime = shiftData?['end_time']?.toString().substring(0, 16) ?? 'Aktif';
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 750,
+        height: 600,
+        padding: const EdgeInsets.all(24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Laporan Shift #${widget.shiftId} - Kasir $kasirName', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text('Periode: $startTime  →  $endTime', style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
+            ]),
+            IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(context)),
+          ]),
+          const Divider(height: 24),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(child: Text(_error!, style: const TextStyle(color: AppColors.error)))
+                    : _buildReportBody(),
+          ),
+          const Divider(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Tutup'),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: _loading || _error != null
+                    ? null
+                    : () {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Menyiapkan & mencetak Laporan Shift #${widget.shiftId}...'),
+                          backgroundColor: AppColors.primary,
+                          duration: const Duration(seconds: 2),
+                        ));
+                      },
+                icon: const Icon(Icons.print_rounded, size: 18),
+                label: const Text('Cetak / Print Laporan'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildReportBody() {
+    final summary = _report?['summary'] ?? {};
+    final totalSales = summary['total_sales'] ?? 0;
+    final totalTxns = summary['total_transactions'] ?? 0;
+    final cash = summary['cash'] ?? 0;
+    final card = summary['card'] ?? 0;
+    final digital = summary['digital'] ?? 0;
+    final txns = (_report?['transactions'] as List?) ?? [];
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: AppColors.primaryContainer, borderRadius: BorderRadius.circular(10)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Total Omset Shift', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.onPrimaryContainer)),
+            const SizedBox(height: 4),
+            Text(_fmt(totalSales), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
+          ]),
+        )),
+        const SizedBox(width: 10),
+        Expanded(child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: AppColors.secondaryContainer, borderRadius: BorderRadius.circular(10)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Jumlah Transaksi', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.onSecondaryContainer)),
+            const SizedBox(height: 4),
+            Text('$totalTxns Transaksi', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.onSecondaryContainer)),
+          ]),
+        )),
+        const SizedBox(width: 10),
+        Expanded(child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: AppColors.surfaceContainerLow, borderRadius: BorderRadius.circular(10)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Pembayaran Tunai (Cash)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.onSurfaceVariant)),
+            const SizedBox(height: 4),
+            Text(_fmt(cash), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ]),
+        )),
+      ]),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: Text('Debit/Kartu: ${_fmt(card)}', style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant))),
+        Expanded(child: Text('Digital/QRIS: ${_fmt(digital)}', style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant))),
+      ]),
+      const SizedBox(height: 16),
+      const Text('Rincian Transaksi Shift Ini:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 8),
+      Expanded(
+        child: txns.isEmpty
+            ? const Center(child: Text('Belum ada transaksi.'))
+            : ListView.separated(
+                itemCount: txns.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, i) {
+                  final t = txns[i];
+                  final items = (t['items'] as List?) ?? [];
+                  final itemsStr = items.map((e) => '${e['product_name']} (${e['qty']}x)').join(', ');
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerLowest,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.outlineVariant),
+                    ),
+                    child: Row(children: [
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('${t['transaction_number']}  •  ${t['payment_method']?.toString().toUpperCase()}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          const SizedBox(height: 2),
+                          Text('Barang: $itemsStr', style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
+                        ]),
+                      ),
+                      Text(_fmt(t['grand_total']), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                    ]),
+                  );
+                },
+              ),
+      ),
+    ]);
   }
 }
