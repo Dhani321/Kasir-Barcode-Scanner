@@ -178,7 +178,7 @@ class _StokTabState extends State<StokTab> {
                 Expanded(flex: 2, child: _TH('Kategori')),
                 Expanded(flex: 2, child: _TH('Harga', right: true)),
                 Expanded(flex: 2, child: _TH('Level Stok', center: true)),
-                SizedBox(width: 120, child: _TH('Aksi', center: true)),
+                SizedBox(width: 150, child: _TH('Aksi', center: true)),
               ]),
             ),
             // Rows
@@ -895,10 +895,42 @@ class _ProductRow extends StatelessWidget {
           ]),
         )
             : Text('${product.stock}', style: const TextStyle(fontSize: 13)))),
-        SizedBox(width: 120, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          IconButton(onPressed: onEdit, icon: const Icon(Icons.edit_rounded, color: AppColors.onSurfaceVariant, size: 18), tooltip: 'Edit'),
-          IconButton(onPressed: () => _showStockDialog(context), icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 18), tooltip: 'Adjust Stok'),
-          IconButton(onPressed: () => onDelete(null), icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 18), tooltip: 'Hapus'),
+        SizedBox(width: 150, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Tooltip(
+            message: 'Edit Produk',
+            child: InkWell(
+              onTap: onEdit,
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(Icons.edit_rounded, color: AppColors.onSurfaceVariant, size: 18),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Tooltip(
+            message: 'Adjust Stok',
+            child: InkWell(
+              onTap: () => _showStockDialog(context),
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 18),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Tooltip(
+            message: 'Hapus Produk',
+            child: InkWell(
+              onTap: () => onDelete(null),
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(Icons.delete, color: AppColors.error, size: 18),
+              ),
+            ),
+          ),
         ])),
       ]),
     );
