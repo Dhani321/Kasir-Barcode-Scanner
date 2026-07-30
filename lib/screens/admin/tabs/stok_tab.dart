@@ -927,7 +927,7 @@ class _ProductRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
               child: const Padding(
                 padding: EdgeInsets.all(8),
-                child: Icon(Icons.delete, color: AppColors.error, size: 18),
+                child: Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 18),
               ),
             ),
           ),
